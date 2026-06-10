@@ -1,0 +1,2 @@
+Title: Learning Market Dynamics: Neural SDEs for Volatility Surface Modeling and Derivative Pricing
+The core claim of my project: classical SDEs hand-specify structure that markets don't actually follow. Neural SDEs learn that structure from data while preserving theoretical guarantees.
