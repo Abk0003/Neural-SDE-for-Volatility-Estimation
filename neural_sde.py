@@ -8,10 +8,14 @@ import matplotlib.pyplot as plt
 import yfinance as yf
 
 data = yf.download("^NSEI", start="2000-01-01", end= "2025-12-31")
+dataVIX = yf.download("^INDIAVIX", start="2000-01-01", end= "2025-12-31")
 price = data["Close"].values.dropna()
+priceVIX = dataVIX["Close"].dropna().values
+returnsVIX = np.log((priceVIX/priceVIX.shift(1)).dropna())
 returns = np.log(price/price.shift(1))
 returns = returns.dropna()
 lr = returns.values.flatten()
+lrVIX = returnsVIX.values.flatten()
 
 idx = int(0.8 * len(lr))
 r_train = lr[:idx]

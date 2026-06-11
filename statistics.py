@@ -6,7 +6,8 @@ from statsmodels.stats.diagnostic import acorr_ljungbox
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-data = yf.download("^VIX", start = "2000-01-01", end = "2026-01-01")
+data = yf.download("^INDIAVIX", start = "2000-01-01", end = "2026-01-01")
+print(data.head())
 log_return = np.log(data["Close"]/data["Close"].shift(1))
 log_return = log_return.dropna()
 lr = log_return.values.flatten()
