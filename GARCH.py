@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -76,5 +77,19 @@ print(f"600-day forecast: {vol_fc[599]:.4f}%")
 print(f"1000-day forecast: {vol_fc[999]:.4f}%")
 print(f"3000-day forecast: {vol_fc[2999]:.4f}%")
 print(f"10000-day forecast: {vol_fc[9999]:.4f}%")
+
+f = vol_fc**2
+plt.plot(f)
+plt.axhline(
+    omega/(1-alpha-beta),
+    color='red',
+    linestyle='--',
+    label='Unconditional Variance'
+)
+
+plt.legend()
+plt.title("Convergence of Conditional Variance Forecast")
+plt.show()
+plt.savefig("Convergence of Conditional Variance Forecast in GARCH.png")
 
 
