@@ -89,7 +89,6 @@ plt.axhline(
 
 plt.legend()
 plt.title("Convergence of Conditional Variance Forecast")
-plt.show()
 plt.savefig("Convergence of Conditional Variance Forecast in GARCH.png")
 
 
