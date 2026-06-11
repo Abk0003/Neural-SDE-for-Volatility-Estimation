@@ -20,7 +20,21 @@ dt = 1/252
 N = len(r_train)
 
 class NeuralSDE(nn.Module):
-    def __init__(self):
+    def __init__(self,in_channels,out_channels):
         super(NeuralSDE, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(in_channels,64),
+            nn.ReLU(),
+            nn.Linear(64,64),
+            nn.ReLU(),
+            nn.Linear(64,64),
+            nn.ReLU(),
+            nn.Linear(64,out_channels),
+        )
+    def forward(self,x):
+        out = self.net(x)
+        out = nn.Softmax(out)
+        return out
+
 
 
