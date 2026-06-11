@@ -18,15 +18,15 @@ r_test = lr[idx:]
 dt = 1/252
 N = len(r_train)
 
-mu      = 0.08
+mu      = np.mean(r_train) * 252
 kappa   = 2.0
-theta   = np.var(lr)
+theta   = np.var(lr) * 252
 epsilon = 0.5
 rho     = -0.7
 S = np.zeros(N)
 v = np.zeros(N)
 S[0] = float(price.iloc[0,0])
-v[0] = np.var(lr)
+v[0] = np.var(lr) *252
 #EULER METHOD
 """
 for i in range(1,N):
@@ -53,21 +53,24 @@ for i in range(1,N):
         Zp = np.random.normal(0, 1)
         Zs = Zv * rho + (1 - rho ** 2) ** (0.5) * Zp
         if phi <= 1.5:
-                gamma = phi - 1
-                b = (2/gamma)**0.5 - (gamma/2)**0.5
-                a = m/(1+b**2)
-                v[i] = a*(b + Zv)**2
-                v[i] = max(v[i],1e-10)
+                b2 = 2 / phi - 1 + np.sqrt(2 / phi * (2 / phi - 1))
+                a = m / (1 + b2)
+                v[i] = max(a * (np.sqrt(b2) + Zv) ** 2, 1e-10)
         else:
-                nu = np.log(m**2/(s2 + m**2)**0.5)
-                zeta = np.sqrt(np.log(1 + phi))
-                Z = np.random.normal(0, 1)
-                A = np.exp(nu)
-                B = zeta
-                v[i] = np.exp(nu + zeta*Zv)
-                v[i] = max(v[i], 1e-10)
-        S[i] = S[i - 1] * (1 + mu * dt + max(v[i], 1e-12) ** (0.5) * dt ** (0.5) * Zs)
+                p = (phi - 1) / (phi + 1)
+                beta = (1 - p) / m
+                U = np.random.uniform(0, 1)
+                v[i] = max(0.0 if U <= p else np.log((1 - p) / (1 - U)) / beta, 1e-10)
+        #S[i] = S[i - 1] * (1 + mu * dt + max(v[i], 1e-12) ** (0.5) * dt ** (0.5) * Zs) [Aritemetic]
+        S[i] = S[i - 1] * np.exp((mu - 0.5 * v[i-1]) * dt + np.sqrt(v[i-1] * dt) * Zs) #[geometric]
 
+plt.plot(S)
+plt.savefig("hestonSQE.png")
+plt.show()
+
+plt.plot(v)
+plt.savefig("hestonVQE.png")
+plt.show()
 vol_fc = v**0.5
 print(f"1-day  forecast: {vol_fc[0] :.4f}%")
 print(f"5-day  forecast: {vol_fc[4]:.4f}%")
