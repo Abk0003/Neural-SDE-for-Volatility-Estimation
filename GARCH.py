@@ -7,6 +7,8 @@ from scipy.optimize import minimize
 
 data = yf.download("^NSEI", start="2000-01-01", end= "2025-12-31")
 prices = data["Close"].dropna()
+print(data.head())
+print(data.shape)
 returns = data["Close"]/data["Close"].shift(1)
 log_returns = np.log(returns).dropna() * 100
 
@@ -90,5 +92,20 @@ plt.axhline(
 plt.legend()
 plt.title("Convergence of Conditional Variance Forecast")
 plt.savefig("Convergence of Conditional Variance Forecast in GARCH.png")
+
+"""
+1-day  forecast: 1.2140%
+5-day  forecast: 1.2255%
+22-day forecast: 1.2705%
+50-day forecast: 1.3326%
+100-day forecast: 1.4159%
+200-day forecast: 1.5164%
+300-day forecast: 1.5686%
+400-day forecast: 1.5965%
+600-day forecast: 1.6197%
+1000-day forecast: 1.6287%
+3000-day forecast: 1.6296%
+10000-day forecast: 1.6296%
+"""
 
 
