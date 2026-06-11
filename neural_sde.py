@@ -23,6 +23,21 @@ r_test = lr[idx:]
 dt = 1/252
 N = len(r_train)
 
+features = []
+for i in range(len(lr)):
+    rel_vol5 = lr.rolling(5).std()
+    rel_vol20 = lr.rolling(20).std()
+    mom_5 = lr.rolling(5).mean()
+    mom_20 = lr.rolling(20).mean()
+    r = lr[i]
+    vix = lrVIX[i]
+    vix_t = (lrVIX - lrVIX.shift(1))/lrVIX.shift(1)[i]
+    skew = np.skew(lr)[i]
+    kurt = np.kurtosis(lr)[i]
+    f = [rel_vol5, rel_vol20, mom_5, mom_20, skew, kurt, vix_t, vix,r]
+    features.append(f)
+
+features = torch.tensor(features)
 class NeuralSDE(nn.Module):
     def __init__(self,in_channels,out_channels):
         super(NeuralSDE, self).__init__()
