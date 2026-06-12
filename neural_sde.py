@@ -10,11 +10,16 @@ from scipy.stats import skew, kurtosis
 
 data = yf.download("^NSEI", start="2000-01-01", end= "2025-12-31")
 dataVIX = yf.download("^INDIAVIX", start="2000-01-01", end= "2025-12-31")
-price = data["Close"].values.dropna()
-priceVIX = dataVIX["Close"].dropna().values
+price = data["Close"].dropna()
+priceVIX = dataVIX["Close"].dropna()
 returnsVIX = np.log((priceVIX/priceVIX.shift(1)).dropna())
 returns = np.log(price/price.shift(1))
 returns = returns.dropna()
+lr = returns
+rel_vol5 = lr.rolling(5).std()
+rel_vol20 = lr.rolling(20).std()
+mom_5 = lr.rolling(5).mean()
+mom_20 = lr.rolling(20).mean()
 lr = returns.values.flatten()
 lrVIX = returnsVIX.values.flatten()
 
@@ -23,10 +28,6 @@ r_train = lr[:idx]
 r_test = lr[idx:]
 dt = 1/252
 N = len(r_train)
-rel_vol5 = lr.rolling(5).std()
-rel_vol20 = lr.rolling(20).std()
-mom_5 = lr.rolling(5).mean()
-mom_20 = lr.rolling(20).mean()
 features = []
 for i in range(len(lr)):
     rel_5 = rel_vol5[i]
@@ -39,11 +40,11 @@ for i in range(len(lr)):
         vix_t = 0
     else:
         vix_t = (lrVIX[i] - lrVIX[i - 1]) / (lrVIX[i - 1] + 1e-8)
-    skewi = skew(lr[max(0, i - 20):i])
-    kurti = kurtosis(lr[max(0, i - 20):i])
-    f = [rel_vol5, rel_vol20, mom_5, mom_20, skewi, kurti, vix_t, vix,r]
+    skewi = skew(lr[max(0, i - 20):i]) if i > 1 else 0
+    kurti = kurtosis(lr[max(0, i - 20):i]) if i > 1 else 0.0
+    f = [rel_vol5.iloc[i], rel_vol20.iloc[i], mom_5.iloc[i], mom_20.iloc[i], skewi, kurti, vix_t, vix,r]
     features.append(f)
-
+features = features[20:]
 features = torch.tensor(features)
 
 class MLP(nn.Module):
@@ -74,21 +75,33 @@ class NeuralSDE(nn.Module):
             nn.Tanh(),
             nn.Linear(64,1)
         )
-    def forward(self,x,step=1):
-        for i in range(step):
+    def forward(self,x,h = None):
+        if h is None:
             h = self.encoder(x)
-            inp = torch.cat([h, x], dim=-1)
-            mu = self.drift_net(inp)
-            sigma = F.softplus(self.diff(inp))
-            dW = torch.randn_like(h) * np.sqrt(dt)
-            h_next = h + mu * dt + sigma * dW
-            out = self.decoder(h_next)
-            return out
+        inp = torch.cat([h, x], dim=-1)
+        mu = self.drift(inp)
+        sigma = F.softplus(self.diff(inp))
+        dw = torch.randn_like(h) * np.sqrt(dt)
+        h_new = h + mu * dt + sigma * dw
+        out = self.decoder(h_new)
+        return out, h_new
 
-
-model = NeuralSDE(8,1)
+model = NeuralSDE(9,64)
 optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
 criterion = torch.nn.MSELoss()
+X = features[:idx]
+y = torch.tensor(lr[20:idx+20], dtype=torch.float32).unsqueeze(1)
+h = None
+for epoch in range(200):
+    optimizer.zero_grad()
+    out, h = model(X,h)
+    h.detach()
+    loss = criterion(out, y)
+    loss.backward()
+    optimizer.step()
+    print(loss.item())
+
+
 
 
 
