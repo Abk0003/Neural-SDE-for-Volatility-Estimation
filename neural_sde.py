@@ -47,11 +47,11 @@ for i in range(len(lr)):
 features = torch.tensor(features)
 
 class MLP(nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim):
+    def __init__(self, in_dim, out_dim):
         super(MLP, self).__init__()
-        self.fc1 = nn.Linear(in_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, out_dim)
+        self.fc1 = nn.Linear(in_dim, 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, out_dim)
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -67,11 +67,24 @@ class NeuralSDE(nn.Module):
             nn.Tanh(),
             nn.Linear(64, latent_dim)
         )
+        self.drift = MLP(feature_dim+latent_dim,latent_dim)
+        self.diff = MLP(feature_dim+latent_dim,latent_dim)
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dim, 64),
+            nn.Tanh(),
+            nn.Linear(64,1)
+        )
+    def forward(self,x,step=1):
+        for i in range(step):
+            h = self.encoder(x)
+            inp = torch.cat([h, x], dim=-1)
+            mu = self.drift_net(inp)
+            sigma = F.softplus(self.diff(inp))
+            dW = torch.randn_like(h) * np.sqrt(dt)
+            h_next = h + mu * dt + sigma * dW
+            out = self.decoder(h_next)
+            return out
 
-    def forward(self,x):
-        out = self.net(x)
-        out = F.softmax(out)
-        return out
 
 model = NeuralSDE(8,1)
 optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
