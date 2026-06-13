@@ -80,20 +80,21 @@ class NeuralSDE(nn.Module):
         return out, h_new
 
 idx = int(0.8 * len(features))
-r_train = features[:idx]
-r_test = features[idx:]
+X_train = features[:idx].to(device)
+X_test = features[idx:].to(device)
+y_train = y[:idx].to(device)
+y_test = y[idx:].to(device)
 model = NeuralSDE(9,8).to(device)
 optimizer = torch.optim.Adam(model.parameters(),lr=3e-4)
 criterion = torch.nn.MSELoss()
-X = features[:idx].to(device)
 
 for epoch in range(200):
     epoch_loss = 0.0
     h = None
     model.train()
 
-    for t in range(len(X)):
-        out, h = model(X[t:t+1], h)
+    for t in range(len(X_train)):
+        out, h = model(X_train[t:t+1], h)
         loss = criterion(out, y[t:t+1])
 
         optimizer.zero_grad()
@@ -104,7 +105,15 @@ for epoch in range(200):
         h = h.detach()
         epoch_loss += loss.item()
 
-    print(f"Epoch: {epoch}, Loss: {epoch_loss / len(X):.6f}")
+    model.eval()
+    with torch.no_grad():
+        val_loss = 0.0
+        h_val = None
+        for t in range(len(X_test)):
+            out, h_val = model(X_test[t:t + 1], h_val)
+            val_loss += criterion(out, y_test[t:t + 1]).item()
+
+    print(f"Epoch {epoch:3d} | train: {epoch_loss / len(X_train):.5f} | val: {val_loss / len(X_test):.5f}")
 
 
 
