@@ -26,7 +26,7 @@ df["ret_lag"] = df["ret"].shift(1)
 df["vix_lag"] = df["ret_v"].shift(1)
 df["skew20"] = df["ret"].rolling(20).apply(skew, raw=True).shift(1)
 df["kurt20"] = df["ret"].rolling(20).apply(kurtosis, raw=True).shift(1)
-df["spread"] = (nifty["High"] - nifty["Low"]).shift(1)
+df["spread"] = ((nifty["High"] - nifty["Low"])/nifty["Close"]).shift(1)
 df["vix_t"]   = df["ret_v"].diff() / (df["ret_v"].shift(1).abs() + 1e-8)
 df["target"] =  df["ret"].rolling(5).std().shift(-5)
 df = df.dropna()
@@ -46,9 +46,12 @@ class MLP(nn.Module):
         self.fc1 = nn.Linear(in_dim, 64)
         self.fc2 = nn.Linear(64, 64)
         self.fc3 = nn.Linear(64, out_dim)
+        self.drop = nn.Dropout(p=0.3)
     def forward(self, x):
         x = F.tanh(self.fc1(x))
+        x = self.drop(x)
         x = F.tanh(self.fc2(x))
+        x = self.drop(x)
         x = self.fc3(x)
         return x
 
@@ -57,16 +60,16 @@ class NeuralSDE(nn.Module):
         super(NeuralSDE, self).__init__()
         self.latent_dim = latent_dim
         self.encoder = nn.Sequential(
-            nn.Linear(feature_dim, 64),
+            nn.Linear(feature_dim, 16),
             nn.Tanh(),
-            nn.Linear(64, latent_dim)
+            nn.Linear(16, latent_dim)
         )
         self.drift = MLP(feature_dim+latent_dim,latent_dim)
         self.diff = MLP(feature_dim+latent_dim,latent_dim)
         self.decoder = nn.Sequential(
-            nn.Linear(latent_dim, 64),
+            nn.Linear(latent_dim, 16),
             nn.Tanh(),
-            nn.Linear(64,1),
+            nn.Linear(16,1),
         )
     def forward(self,x,h = None):
         if h is None:
@@ -85,7 +88,7 @@ X_test = features[idx:].to(device)
 y_train = y[:idx].to(device)
 y_test = y[idx:].to(device)
 model = NeuralSDE(12,8).to(device)
-optimizer = torch.optim.Adam(model.parameters(),lr=3e-4)
+optimizer = torch.optim.Adam(model.parameters(),lr=3e-4,weight_decay=1e-4)
 criterion = torch.nn.MSELoss()
 
 for epoch in range(200):
