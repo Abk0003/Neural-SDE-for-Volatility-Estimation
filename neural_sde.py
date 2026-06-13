@@ -35,9 +35,7 @@ features_col = ["mom_5","mom_20","vol_5","vol_20","vov20","vov60","ret_lag","vix
 features = df[features_col]
 features = features.values
 y = df["target"].values
-features = (features - features.mean()) / (features.std() + 1e-8)
 features = torch.tensor(features, dtype=torch.float32).to(device)
-y = (y - y.mean()) / (y.std() + 1e-8)
 y = torch.tensor(y, dtype=torch.float32).unsqueeze(1).to(device)
 
 class MLP(nn.Module):
@@ -46,7 +44,7 @@ class MLP(nn.Module):
         self.fc1 = nn.Linear(in_dim, 64)
         self.fc2 = nn.Linear(64, 64)
         self.fc3 = nn.Linear(64, out_dim)
-        self.drop = nn.Dropout(p=0.3)
+        self.drop = nn.Dropout(p=0.1)
     def forward(self, x):
         x = F.tanh(self.fc1(x))
         x = self.drop(x)
@@ -87,6 +85,10 @@ X_train = features[:idx].to(device)
 X_test = features[idx:].to(device)
 y_train = y[:idx].to(device)
 y_test = y[idx:].to(device)
+X_train = (X_train - X_train.mean()) / X_train.std()
+X_test = (X_test - X_test.mean()) / X_test.std()
+y_train = (y_train - y_train.mean()) / y_train.std()
+y_test = (y_test - y_test.mean()) / y_test.std()
 model = NeuralSDE(12,8).to(device)
 optimizer = torch.optim.Adam(model.parameters(),lr=3e-4,weight_decay=1e-4)
 criterion = torch.nn.MSELoss()
