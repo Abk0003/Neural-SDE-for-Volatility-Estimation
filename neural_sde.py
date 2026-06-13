@@ -10,48 +10,35 @@ from scipy.stats import skew, kurtosis
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("cuda" if torch.cuda.is_available() else "cpu")
-data = yf.download("^NSEI", start="2000-01-01", end= "2025-12-31")
-dataVIX = yf.download("^INDIAVIX", start="2000-01-01", end= "2025-12-31")
-df = pd.DataFrame()
-df["nifty"] = data["Close"]
-df["vix"] = dataVIX["Close"]
-df = df.dropna()
-price = df["nifty"].dropna()
-priceVIX = df["vix"].dropna()
-returnsVIX = np.log((priceVIX/priceVIX.shift(1)).dropna())
-returns = np.log(price/price.shift(1))
-returns = returns.dropna()
-lr = returns
-rel_vol5 = lr.rolling(5).std()
-rel_vol20 = lr.rolling(20).std()
-mom_5 = lr.rolling(5).mean()
-mom_20 = lr.rolling(20).mean()
-lr = returns.values.flatten()
-lrVIX = returnsVIX.values.flatten()
 
+nifty = yf.download("^NSEI", start="2000-01-01", end="2025-12-31")
+vix = yf.download("^INDIANVIX", start="2000-01-01", end="2025-12-31")
+df = pd.DataFrame()
+df["ret"] = np.log(nifty["Close"]/nifty["Close"].shift(1))
+df["ret_v"] = np.log(vix["Close"]/vix["Close"].shift(1))
+df["mom_5"] = df["ret"].rolling(5).mean().shift(1)
+df["mom_20"] = df["ret"].rolling(20).mean().shift(1)
+df["vol_5"] = df["ret"].rolling(5).std().shift(1)
+df["vol_20"] = df["ret"].rolling(20).std().shift(1)
+df["vov20"] = df["ret_v"].rolling(20).std().shift(1)
+df["vov60"] = df["ret_v"].rolling(60).std().shift(1)
+df["ret_lag"] = df["ret"].shift(1)
+df["vix_lag"] = df["vix"].shift(1)
+df["skew20"] = df["ret"].rolling(20).apply(skew, raw=True).shift(1)
+df["kurt20"] = df["ret"].rolling(20).apply(kurtosis, raw=True).shift(1)
+df["spread"] = (nifty["High"] - nifty["Low"]).shift(1)
+df["vix_t"]   = df["retVIX"].diff() / (df["retVIX"].shift(1).abs() + 1e-8)
+df["target"] =  df["ret"].rolling(5).std().shift(-5)
+df = df.dropna()
 dt = 1/252
-features = []
-for i in range(len(lr)):
-    rel_5 = rel_vol5.iloc[i]
-    rel_20 = rel_vol20.iloc[i]
-    m5 = mom_5.iloc[i]
-    m20 = mom_20.iloc[i]
-    r = lr[i]
-    vix = lrVIX[i]
-    if i == 0:
-        vix_t = 0
-    else:
-        vix_t = (lrVIX[i] - lrVIX[i - 1]) / (lrVIX[i - 1] + 1e-8)
-    skewi = skew(lr[max(0, i - 20):i]) if i > 1 else 0
-    kurti = kurtosis(lr[max(0, i - 20):i]) if i > 1 else 0.0
-    f = [rel_5, rel_20, m5, m20, skewi, kurti,vix, vix_t, r]
-    features.append(f)
-features = features[20:]
-features = np.array(features)
-feat_mean = features.mean(axis=0)
-feat_std  = features.std(axis=0) + 1e-8
-features  = (features - feat_mean) / feat_std
-features = torch.tensor(features, dtype=torch.float32)
+features_col = ["mom_5","mom_20","vol_5","vol_20","vov20","vov60","ret_lag","vix_lag","skew20","kurt20","spread","vix_t"]
+features = df[features_col]
+features = features.values
+y = df["target"].values
+features = (features - features.mean()) / (features.std() + 1e-8)
+features = torch.tensor(features, dtype=torch.float32).to(device)
+y = (y - y.mean()) / (y.std() + 1e-8)
+y = torch.tensor(y, dtype=torch.float32).unsqueeze(1).to(device)
 
 class MLP(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -80,7 +67,6 @@ class NeuralSDE(nn.Module):
             nn.Linear(latent_dim, 64),
             nn.Tanh(),
             nn.Linear(64,1),
-            nn.Sigmoid()
         )
     def forward(self,x,h = None):
         if h is None:
@@ -100,28 +86,25 @@ model = NeuralSDE(9,8).to(device)
 optimizer = torch.optim.Adam(model.parameters(),lr=3e-4)
 criterion = torch.nn.MSELoss()
 X = features[:idx].to(device)
-y = np.array(lr[21:idx+21]**2)
-y_mean = np.mean(y)
-y_std = np.std(y)
-y = (y - y_mean)/y_std
-y = torch.tensor(y, dtype=torch.float32).unsqueeze(1).to(device)
 
 for epoch in range(200):
     epoch_loss = 0.0
     h = None
-    lossT = 0
+    model.train()
+
     for t in range(len(X)):
-        out, h = model(X[t:t+1],h)
-        lossT += criterion(out, y[t:t+1])
-        if (t+1)%128 == 0:
-            epoch_loss += lossT.item()
-            optimizer.zero_grad()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            lossT.backward()
-            optimizer.step()
-            h = h.detach()
-            lossT = 0
-    print(f"Epoch : {epoch}, Loss : {epoch_loss}")
+        out, h = model(X[t:t+1], h)
+        loss = criterion(out, y[t:t+1])
+
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+
+        h = h.detach()
+        epoch_loss += loss.item()
+
+    print(f"Epoch: {epoch}, Loss: {epoch_loss / len(X):.6f}")
 
 
 
