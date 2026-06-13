@@ -74,8 +74,8 @@ class NeuralSDE(nn.Module):
             h = self.encoder(x)
         inp = torch.cat([h, x], dim=-1)
         mu = self.drift(inp)
-        sigma = F.softplus(self.diff(inp))
-        dw = torch.randn_like(h) * np.sqrt(dt) * 0.1
+        sigma = 0.1*F.softplus(self.diff(inp))
+        dw = torch.randn_like(h) * np.sqrt(dt) * 0.01
         h_new = h + mu * dt + sigma * dw
         out = self.decoder(h_new)
         return out, h_new
@@ -85,29 +85,43 @@ X_train = features[:idx].to(device)
 X_test = features[idx:].to(device)
 y_train = y[:idx].to(device)
 y_test = y[idx:].to(device)
-X_train = (X_train - X_train.mean()) / X_train.std()
-X_test = (X_test - X_test.mean()) / X_test.std()
-y_train = (y_train - y_train.mean()) / y_train.std()
-y_test = (y_test - y_test.mean()) / y_test.std()
+x_mean = X_train.mean(0, keepdim=True)
+x_std  = X_train.std(0, keepdim=True)
+
+X_train = (X_train - x_mean)/x_std
+X_test  = (X_test  - x_mean)/x_std
+
+y_mean = y_train.mean()
+y_std  = y_train.std()
+
+y_train = (y_train-y_mean)/y_std
+y_test  = (y_test-y_mean)/y_std
 model = NeuralSDE(12,8).to(device)
 optimizer = torch.optim.Adam(model.parameters(),lr=3e-4,weight_decay=1e-4)
 criterion = torch.nn.MSELoss()
 
-for epoch in range(200):
-    epoch_loss = 0.0
-    h = None
-    model.train()
+seq_len = 60
 
-    for t in range(len(X_train)):
-        out, h = model(X_train[t:t+1], h)
-        loss = criterion(out, y_train[t:t+1])
+for epoch in range(200):
+    h = None
+    epoch_loss = 0
+
+    for start in range(0, len(X_train)-seq_len):
 
         optimizer.zero_grad()
+
+        loss = 0
+
+        for t in range(start, start+seq_len):
+            out, h = model(X_train[t:t+1], h)
+            loss += criterion(out, y_train[t:t+1])
+
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(model.parameters(),1.0)
         optimizer.step()
 
         h = h.detach()
+
         epoch_loss += loss.item()
 
     model.eval()
